@@ -1,33 +1,50 @@
-name: Build Theos Tweak
+name: Build Theos Tweaks
 
 on:
   workflow_dispatch:
+  push:
 
 jobs:
   build:
     runs-on: macos-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Install dependencies
         run: |
-          brew install dpkg ldid make
-
+          brew install make xz
+          
       - name: Setup Theos
         run: |
           git clone --recursive https://github.com/theos/theos.git $HOME/theos
+          echo "THEOS=$HOME/theos" >> $GITHUB_ENV
+          echo "PATH=$HOME/theos/bin:$PATH" >> $GITHUB_ENV
 
-      - name: Export Theos path
-        run: echo "THEOS=$HOME/theos" >> $GITHUB_ENV
-
-      - name: Build package
+      - name: Setup SDK
         run: |
-          make clean package
+          mkdir -p $HOME/theos/sdks
+          curl -L -o sdk.tar.xz https://github.com/theos/sdks/releases/latest/download/iPhoneOS15.0.sdk.tar.xz
+          tar -xf sdk.tar.xz -C $HOME/theos/sdks
 
-      - name: Upload .deb
+      - name: Build YouPiP
+        run: |
+          cd YouPiP
+          make clean package FINALPACKAGE=1
+
+      - name: Build YTVideoOverlay
+        run: |
+          cd YTVideoOverlay
+          make clean package FINALPACKAGE=1
+
+      - name: Collect dylibs
+        run: |
+          mkdir output
+          find . -name "*.dylib" -exec cp {} output/ \;
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: tweak-package
-          path: packages/*.deb
+          name: dylibs
+          path: output/
